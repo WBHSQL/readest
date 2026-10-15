@@ -2622,7 +2622,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     .map(buildToolButton)
     .filter((button): button is NonNullable<typeof button> => button !== null);
   if (showAskAI) {
-    toolButtons.push({ tooltipText: _('Ask AI'), Icon: PiRobot, onClick: handleAskAI });
+    // The toolbar has a width cap; put AI first so it is visible without scrolling.
+    toolButtons.unshift({ tooltipText: _('Ask AI'), Icon: PiRobot, onClick: handleAskAI });
   }
 
   // The lookup popups never deselect (handleDictionary / handleTranslation /
