@@ -38,6 +38,7 @@ import { sliceSinceLastId } from '../memory/consolidatorCursor';
 import { SkillRegistry } from '../skills/SkillRegistry';
 import type { Skill } from '../skills/types';
 import { useReedyStore } from '../store/reedyStore';
+import { useAISelectionDraftStore } from '@/store/aiSelectionDraftStore';
 import { useReedyTurn } from './useReedyTurn';
 import { AgentThread } from './AgentThread';
 import { Composer } from './Composer';
@@ -69,12 +70,19 @@ export function ReedyAssistant({
   appService,
   bookDoc,
   bookHash,
+  bookKey,
   aiSettings,
   readingContext,
   userId = 'local',
   onNavigateToCfi,
 }: ReedyAssistantProps) {
   const models = useMemo(() => createReedyModels(aiSettings), [aiSettings]);
+  const pendingExcerpt = useAISelectionDraftStore((state) => state.pending);
+  const consumeExcerpt = useAISelectionDraftStore((state) => state.consume);
+  const onDraftApplied = useCallback(
+    (id: number) => consumeExcerpt(bookKey, id),
+    [consumeExcerpt, bookKey],
+  );
 
   // Lazily open reedy.db on first mount. The promise resolves once and
   // we share the same ReedyDb + Indexer + Retriever + MemoryService +
@@ -379,6 +387,8 @@ export function ReedyAssistant({
       </div>
       <Composer
         isRunning={isRunning}
+        draft={pendingExcerpt?.bookKey === bookKey ? pendingExcerpt : null}
+        onDraftApplied={onDraftApplied}
         onSend={handleSend}
         onAbort={abort}
         skills={availableSkills.map((s) => ({

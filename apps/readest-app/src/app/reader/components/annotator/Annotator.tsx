@@ -19,6 +19,8 @@ import { getBookProgress, useBookProgress } from '@/store/readerProgressStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useNotebookStore } from '@/store/notebookStore';
+import { useAISelectionDraftStore } from '@/store/aiSelectionDraftStore';
+import { PiRobot } from 'react-icons/pi';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useCustomDictionaryStore } from '@/store/customDictionaryStore';
 import { isSystemDictionaryEnabled } from '@/services/dictionaries/registry';
@@ -300,6 +302,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const annotPopupMaxWidth = Math.min(useResponsiveSize(300), maxWidth);
   const annotPopupToolSize = useResponsiveSize(44);
   const toolbarToolTypes = getToolbarToolTypes(viewSettings.annotationToolbarItems, canShare);
+  const showAskAI = settings.aiSettings?.enabled === true && !!selection?.text.trim();
+  const toolbarButtonCount = toolbarToolTypes.length + (showAskAI ? 1 : 0);
   const highlightOptionsGap = toolbarToolTypes.length <= 4 ? 4 : 8;
   // Three 30px styles, a four- or five-color pill (100px or 122px), and three gaps;
   // the global toggle adds a 30px button and a gap. Keep in sync with HighlightOptions.
@@ -316,7 +320,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
       ? annotPopupMaxWidth
       : Math.min(
           Math.max(
-            Math.max(toolbarToolTypes.length, 1) * annotPopupToolSize,
+            Math.max(toolbarButtonCount, 1) * annotPopupToolSize,
             highlightOptionsAvailable ? highlightOptionsMinWidth : 0,
           ),
           annotPopupMaxWidth,
@@ -1472,6 +1476,30 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     }
   };
 
+  const handleAskAI = () => {
+    if (!selection?.text.trim() || !settings.aiSettings?.enabled) return;
+    let cfi = selection.cfi;
+    if (!cfi && !selection.popup) {
+      try {
+        cfi = view?.getCFI(selection.index, selection.range);
+      } catch {
+        // Fixed-layout/PDF selections may not expose a resolvable CFI.
+        // The page number still anchors the visible excerpt.
+      }
+    }
+    const queued = useAISelectionDraftStore.getState().queue({
+      bookKey,
+      text: selection.text,
+      bookTitle: bookData.book?.title ?? '',
+      page: selection.page,
+      cfi,
+    });
+    if (!queued) return;
+    handleDismissPopupAndSelection();
+    setNotebookActiveTab('ai');
+    setNotebookVisible(true);
+  };
+
   // Copy a permanent link to what is under the selection, so a highlight can be
   // sent somewhere the moment it is made instead of hunting for it in the
   // sidebar notebook (#5452). When no note is anchored here yet the link still
@@ -2593,6 +2621,9 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const toolButtons = toolbarToolTypes
     .map(buildToolButton)
     .filter((button): button is NonNullable<typeof button> => button !== null);
+  if (showAskAI) {
+    toolButtons.push({ tooltipText: _('Ask AI'), Icon: PiRobot, onClick: handleAskAI });
+  }
 
   // The lookup popups never deselect (handleDictionary / handleTranslation /
   // handleProofread only flip popup flags), so a genuine selection is still

@@ -5,6 +5,7 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   useAssistantRuntime,
+  useComposerRuntime,
   type ThreadMessage,
   type ThreadHistoryAdapter,
 } from '@assistant-ui/react';
@@ -15,6 +16,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useAIChatStore } from '@/store/aiChatStore';
+import { useAISelectionDraftStore } from '@/store/aiSelectionDraftStore';
 import { aiLogger, createTauriAdapter } from '@/services/ai';
 import {
   LegacyIdbBackend,
@@ -77,6 +79,7 @@ interface AIAssistantProps {
 // inner component that uses the runtime hook
 const AIAssistantChat = ({
   aiSettings,
+  bookKey,
   bookHash,
   bookTitle,
   authorName,
@@ -89,6 +92,7 @@ const AIAssistantChat = ({
   onResetIndex,
 }: {
   aiSettings: AISettings;
+  bookKey: string;
   bookHash: string;
   bookTitle: string;
   authorName: string;
@@ -177,6 +181,7 @@ const AIAssistantChat = ({
 
   return (
     <AIAssistantWithRuntime
+      bookKey={bookKey}
       adapter={adapter}
       historyAdapter={historyAdapter}
       onResetIndex={onResetIndex}
@@ -190,6 +195,7 @@ const AIAssistantChat = ({
 };
 
 const AIAssistantWithRuntime = ({
+  bookKey,
   adapter,
   historyAdapter,
   onResetIndex,
@@ -199,6 +205,7 @@ const AIAssistantWithRuntime = ({
   currentTurnId,
   onSourceClick,
 }: {
+  bookKey: string;
   adapter: NonNullable<ReturnType<typeof createTauriAdapter>>;
   historyAdapter?: ThreadHistoryAdapter;
   onResetIndex: () => void;
@@ -217,6 +224,7 @@ const AIAssistantWithRuntime = ({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadWrapper
+        bookKey={bookKey}
         onResetIndex={onResetIndex}
         isLoadingHistory={isLoadingHistory}
         hasActiveConversation={hasActiveConversation}
@@ -229,6 +237,7 @@ const AIAssistantWithRuntime = ({
 };
 
 const ThreadWrapper = ({
+  bookKey,
   onResetIndex,
   isLoadingHistory,
   hasActiveConversation,
@@ -236,6 +245,7 @@ const ThreadWrapper = ({
   currentTurnId,
   onSourceClick,
 }: {
+  bookKey: string;
   onResetIndex: () => void;
   isLoadingHistory: boolean;
   hasActiveConversation: boolean;
@@ -247,7 +257,17 @@ const ThreadWrapper = ({
     currentTurnId ? sourceStore.get(currentTurnId) : [],
   );
   const assistantRuntime = useAssistantRuntime();
+  const composer = useComposerRuntime();
+  const pendingExcerpt = useAISelectionDraftStore((state) => state.pending);
+  const consumeExcerpt = useAISelectionDraftStore((state) => state.consume);
   const { setActiveConversation } = useAIChatStore();
+
+  useEffect(() => {
+    if (!pendingExcerpt || pendingExcerpt.bookKey !== bookKey || isLoadingHistory) return;
+    const existing = composer.getState().text;
+    composer.setText(existing ? `${existing}\n\n${pendingExcerpt.prompt}` : pendingExcerpt.prompt);
+    consumeExcerpt(bookKey, pendingExcerpt.id);
+  }, [pendingExcerpt, bookKey, composer, consumeExcerpt, isLoadingHistory]);
 
   // Subscribe to the active turn's slot in the source store. Replaces the
   // pre-Reedy 500ms poll over a module-global lastSources (per plan §M1.7).
@@ -453,6 +473,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   return (
     <AIAssistantChat
       aiSettings={aiSettings}
+      bookKey={bookKey}
       bookHash={bookHash}
       bookTitle={bookTitle}
       authorName={authorName}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
+import type { AISelectionDraft } from '@/store/aiSelectionDraftStore';
 import { Send, Square, WandSparkles } from 'lucide-react';
 
 /**
@@ -32,6 +33,8 @@ export function Composer({
   skills,
   activeSkillId,
   onSkillSelect,
+  draft,
+  onDraftApplied,
 }: {
   isRunning: boolean;
   onSend: (text: string) => void;
@@ -40,8 +43,16 @@ export function Composer({
   skills?: Skill[];
   activeSkillId?: string | null;
   onSkillSelect?: (id: string | null) => void;
+  draft?: AISelectionDraft | null;
+  onDraftApplied?: (id: number) => void;
 }) {
   const [text, setText] = useState('');
+
+  useEffect(() => {
+    if (!draft) return;
+    setText((current) => (current ? `${current}\n\n${draft.prompt}` : draft.prompt));
+    onDraftApplied?.(draft.id);
+  }, [draft, onDraftApplied]);
 
   const send = useCallback(() => {
     const trimmed = text.trim();
